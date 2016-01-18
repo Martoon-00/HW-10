@@ -1,2 +1,0 @@
-vty
-Dwarf Fortress
