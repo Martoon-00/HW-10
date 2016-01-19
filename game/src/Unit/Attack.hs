@@ -9,7 +9,7 @@ import Functions
 import Data.Time.Units
 import Stats
 import Control.Monad.State
-import Preference
+import Targeting.Preference
 import Unit.Variety
 import LensM
 import Data.Either as Either
@@ -25,6 +25,7 @@ import Data.Maybe
 import StatsLens
 import Data.Time.Units       
 import Control.Concurrent.STM
+import Targeting.Selection
 
 
 fight :: Field -> Unit -> StateT LockedTargets IO ()
@@ -50,8 +51,7 @@ fight field caster'  =  do
 
     failWait :: IO ()
     failWait = do
-        cast <- noCasting
-        liftIO $ field & forUnit uid.casting .~ cast
+        liftIO $ field & forUnit uid.casting .~ Nothing 
         threadDelay $ fromIntegral $ toMicroseconds $ CD $ 10   -- if cast failed, get stunned
 
     again :: StateT LockedTargets IO ()
@@ -90,18 +90,22 @@ fight field caster'  =  do
         return $ targetsAvailable && casterReady
 
     selection' :: Skill -> Caster -> Target -> Bool
-    selection' skill = getAll .: skillTargetSelection skill skill
+    selection' skill = 
+        let skillSelection = skillTargetSelection skill
+            sel = runExtendedSelection skillSelection [minBound .. maxBound]
+        in  getAll .: sel skill
 
     initAttack :: Skill -> StateT LockedTargets IO ()
     initAttack skill  =  do         
         -- init casting
         setTargets
-        cast   <- liftIO $ newCasting (skill^.cd) 
-        liftIO $ field & forUnit uid.casting .~ cast
+        cast   <- liftIO $ newCasting skill 
+        liftIO $ field & forUnit uid.casting .~ Just cast
         castBox <- liftIO newEmptyMVar 
 
         preTargets <- get
-        liftIO $ log $ mappend "Casting at  " $ concat $ map (\u -> "#" ++ show u ++ "  ") $ sort preTargets
+        liftIO $ log $ mappend "Casting at  " $ concat 
+            $ map (\u -> "#" ++ show u ++ "  ") $ sort preTargets
 
         -- get CastSuccess when cast is completed
         liftIO $ void $ forkIO $ waitForSuccess $ putMVar castBox

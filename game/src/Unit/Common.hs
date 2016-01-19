@@ -17,7 +17,7 @@ import Stats
 import Data.Time.Units
 import Data.Array.IO
 import Control.Monad.State
-import Preference
+import Targeting.Preference
 import Unit.Variety
 import Data.Time.Clock.POSIX
 import LensM
@@ -31,26 +31,23 @@ import FieldAccess
 import StatsLens
           
 
-newCasting :: TimeUnit t => t -> IO Casting
-newCasting duration  =  do
+newCasting :: Skill -> IO Casting
+newCasting skill  =  do
+    let duration = skill^.cd
     start <- getPOSIXTime
-    return $ Casting $ do   -- count fraction of cast progress, depending on access time
+    return $ Casting skill $ do   -- count fraction of cast progress, depending on access time
         cur <- getPOSIXTime     
         let durationMcs = fromIntegral $ toMicroseconds $ duration
         let res = fromIntegral (round $ (cur - start) * 10^6 :: Integer) / durationMcs :: Double
         return $ max 0 $ min 1 res
 
-noCasting :: IO Casting
-noCasting  =  newCasting (99 :: Week)
-
 newDefUnit :: Side -> UnitType -> Int -> IO Unit
 newDefUnit s t i  =  do
-    initCasting <- noCasting
     unitLog     <- createUnitLog (0 :: Second) ""
     return Unit { _unitType = t
                 , _stats    = initStats t
                 , _side     = s
-                , _casting  = initCasting
+                , _casting  = Nothing 
                 , _unitId   = i
                 , _unitLog  = unitLog
                 } 

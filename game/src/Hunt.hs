@@ -27,9 +27,11 @@ import StatsLens
 import Control.Arrow
 import Control.Parallel.Strategies
 import FieldAccess
-import Vty.Graphics.Input.Events
+import Graphics.Vty.Input.Events
+import Graphics.Vty
 import Brick
 import Viz.Field
+import Data.Default
 
 battle :: IO ()
 battle  =  do
@@ -38,8 +40,6 @@ battle  =  do
     
 startBattle :: Field -> IO ()
 startBattle field  =  do
-    hideCursor
-    
     allUnits <- fieldUnits field
     fights <- forM allUnits $ \unit -> do
         let startedFight = fight field unit
@@ -51,9 +51,6 @@ startBattle field  =  do
               
     putMVar stopDispListener ()
     -- wait displaying
-
-    -- last display, to definitely see the final scene
-    field & (rollback &&& display >>> uncurry (>>))
 
     putStrLn $ (\w -> "Finish! " ++ w ++ " team wins!") 
         $ case winner of
@@ -83,12 +80,15 @@ screenSize = 1000
 
 displayField :: Field -> IO Bool -> IO ()
 displayField field stopCheck  =  do
-    display field
-    threadDelay 10000
-    stop <- stopCheck 
-    unless stop $ do
-        rollback field 
-        displayField field stopCheck
+    chan <- newChan
+    forkIO $ void $ customMain (mkVty def) chan (fieldApp field) emptyWidget
+    fix $ \f -> do
+        writeChan chan UpdateField
+        threadDelay 10000
+        stop <- stopCheck 
+        if stop
+            then writeChan chan FinishField
+            else f
 
 prepare :: IO ([UnitType], [UnitType])
 prepare  =  do

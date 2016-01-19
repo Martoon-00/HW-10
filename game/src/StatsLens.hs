@@ -1,4 +1,7 @@
-{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, Rank2Types #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module StatsLens where
 
@@ -11,20 +14,26 @@ import Data.Monoid
 import Data.List
 import Data.Function
 import Unit.Type
+import Data.Ratio
 
 class WithStats w where
-    makeStat :: Stat s => Lens' Stats s -> Lens' w Int
+    makeIntStat :: Stat s Int => Lens' Stats s -> Lens' w Int
+
+    makeBoolStat :: Stat s Bool => Lens' Stats s -> Lens' w Bool
 
     fakeNewUnit :: w -> w  -- not for export 
 
     hp :: Lens' w Int
-    hp = makeStat $ __hp__
+    hp = makeIntStat $ __hp__
 
     mp :: Lens' w Int
-    mp = makeStat $ __mp__
+    mp = makeIntStat $ __mp__
+
+    visible :: Lens' w Bool 
+    visible = makeBoolStat $ __visible__
 
     maxStat :: Lens' w Int -> Getter w Int
-    maxStat stat  = to fakeNewUnit.stat 
+    maxStat stat  =  to fakeNewUnit.stat 
  
     revStat :: Functor f => Lens' w Int -> LensLike' f w Int
     revStat stat  =  lens get set
@@ -32,8 +41,15 @@ class WithStats w where
         get u         =  u^.maxStat stat - u^.stat
         set u rem_hp  =  u & stat .~ u^.maxStat stat - rem_hp
 
-boundStat :: Stat s => Lens' Stats s -> Lens' Unit Unit
-boundStat stat  =  lens id $ const bound
+    partStat :: Lens' w Int -> Getter w Rational
+    partStat stat  =  to $ \u -> 
+        let cur = u^.stat.to fromIntegral
+            max = u^.maxStat stat.to fromIntegral
+        in  if max == 0 then 0 else cur % max 
+      
+
+boundStat :: Stat s Int => Lens' Stats s -> Lens' Unit Unit
+boundStat stat  =  lens id $ const $ bound  
   where
     stat' :: Functor f => LensLike' f Unit Int
     stat'  =  stats.stat.statVal
@@ -41,7 +57,7 @@ boundStat stat  =  lens id $ const bound
     bound :: Unit -> Unit
     bound u  =  u & stat'.bounding 0 (u^.maxStat stat') %~ id
 
-bakeStat :: Functor f => LensLike' f FakeUnit Int -> LensLike' f Unit Int
+bakeStat :: Functor f => LensLike' f FakeUnit a -> LensLike' f Unit a
 bakeStat  =  fmap $ modifyAs.mod
   where
     mod :: Lens' FakeUnit FakeUnit
@@ -52,7 +68,6 @@ bakeStat  =  fmap $ modifyAs.mod
 
     sortMod  =  sortBy (compare `on` _modifierPriority)
   
-
     modifyAs :: Lens' Unit FakeUnit
     modifyAs  =  lens toFake setAsFake 
       where
@@ -62,11 +77,13 @@ bakeStat  =  fmap $ modifyAs.mod
     
         setAsFake :: Unit -> FakeUnit -> Unit
         setAsFake u FakeUnit{ _unitTypeF = t, _statsF = s }  =  
-            u { _unitType = t, _stats = s }
+            u{ _unitType = t, _stats = s }
 
 
 instance WithStats Unit where 
-    makeStat stat  =  boundStat stat . bakeStat (makeStat stat)  
+    makeIntStat stat  =  boundStat stat . bakeStat (makeIntStat stat)  
+
+    makeBoolStat stat  =  bakeStat (makeBoolStat stat)
 
     fakeNewUnit Unit{ _unitType = t }  =  Unit 
         { _unitType = t
@@ -80,7 +97,9 @@ instance WithStats Unit where
 
 
 instance WithStats FakeUnit where
-    makeStat stat  =  statsF.stat.statVal
+    makeIntStat stat  =  statsF.stat.statVal
+    
+    makeBoolStat stat  =  statsF.stat.statVal
 
     fakeNewUnit u  =  u & statsF .~ (initStats $ _unitTypeF u)
 

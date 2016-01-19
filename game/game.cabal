@@ -17,8 +17,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     Unit.Attack, Buff, Data, Display, FieldAccess, Field
-    Functions, Hunt, LensM, Modifiers, Ordering,
-    Preference, Random, Relation, Stats, StatsLens, 
+    Functions, Hunt, LensM, Modifiers, Targeting.Ordering,
+    Targeting.Preference, Random, Targeting.Selection, Stats, StatsLens, 
     Unit.Common, Unit.Variety, Unit.Type,
     Viz.Field
   build-depends:       
@@ -44,7 +44,7 @@ library
     , brick
   default-language:    Haskell2010
 
-executable game-exe
+executable game
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N

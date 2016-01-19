@@ -1,4 +1,9 @@
-{-# LANGUAGE TemplateHaskell, Rank2Types, ExistentialQuantification, ImpredicativeTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Data where
 
@@ -12,7 +17,7 @@ import Data.Array
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
-import Ordering
+import Targeting.Ordering
 import Unit.Type
 import LensM
 import Data.Monoid
@@ -34,16 +39,14 @@ data DamageValue      =  Dmg Int
     deriving (Show)
 data Cooldown         =  CD Integer
     deriving (Show)
-                              
-class Stat s where
-    statValue :: s -> Int
+data Visibility       =  Vis Bool     
+                         
+class Show v => Stat s v | s -> v where
+    statValue :: s -> v
 
-    statWrap :: Int -> s
+    statWrap :: v -> s
 
-    statModify :: (Int -> Int) -> (s -> s)
-    statModify f  =  statWrap . f . statValue
-
-    statVal :: (Functor f) => (Int -> f Int) -> s -> f s
+    statVal :: (Functor f) => LensLike' f s v
     statVal  =  lens statValue (const statWrap)
 
     statName :: s -> String
@@ -65,15 +68,13 @@ class Stat s where
     printStatExt :: Stats -> s -> IO ()
     printStatExt stats s  =  do
         setSGR [SetColor Foreground (statColorIntensityExt stats s) (statColorExt stats s)]
-        putStr $ statName s ++ ": " ++ extend len ' ' (show dispVal)
+        putStr $ statName s ++ ": " ++ extend (statMaxDigits s) ' ' (show $ statValue s)
         setSGR []
-      where
-        len     = statMaxDigits s
-        dispVal = min (statValue s) (10 ^ len - 1)
 
 
 data Stats  =  Stats { _hp        :: HitPoints 
                      , _mp        :: ManaPoints
+                     , _visible   :: Visibility
                      , _modifiers :: [Modifier]
                      }   
                  
@@ -93,8 +94,9 @@ type ModifierPriority  =  Int
 data Skill  =  Skill { skillAction          :: Action STM
                      , skillSideEffect      :: Action IO 
                      , skillInfluence       :: SkillInfluence
-                     , skillTargetSelection :: TargetSelection
+                     , skillTargetSelection :: ExtendedSelection 
                      , skillMultitarget     :: Int
+                     , skillName            :: String 
                      , _cd                  :: Cooldown
                      , _mc                  :: ManaConsumption
                      }
@@ -136,7 +138,7 @@ type ExpireCond  =  Target -> IO Bool
 data Unit  =  Unit { _unitType :: UnitType
                    , _stats    :: Stats
                    , _side     :: Side
-                   , _casting  :: Casting
+                   , _casting  :: Maybe Casting
                    , _unitId   :: UnitId
                    , _unitLog  :: UnitLog
                    }
@@ -147,7 +149,8 @@ data Side  =  LeftSide
        
 type UnitId  =  Int
                     
-data Casting  =  Casting {  _progress  :: IO Double
+data Casting  =  Casting { _castSkill :: Skill
+                         , _progress  :: IO Double
                          }
 
 data UnitLog  =  UnitLog { _logText :: IO String
@@ -180,7 +183,13 @@ data Relation  =  Self
                |  Ally
                |  Enemy
     deriving (Eq, Ord, Enum, Show)
-                    
+ 
+data SelectionOption
+    =  Alive
+    |  Visible
+    deriving (Eq, Enum, Bounded, Show)
+
+type ExtendedSelection  =  ([TargetSelection], [SelectionOption])
 
 -------------------------------
 ------ target preference ------
@@ -213,6 +222,7 @@ makeLenses ''Field
 makeLenses ''Skill                 
 makeLensesFor [ ("_hp", "__hp__")
               , ("_mp", "__mp__")
+              , ("_visible", "__visible__")
               , ("_modifiers", "modifiers")
               ] ''Stats
 makeLenses ''Unit                        

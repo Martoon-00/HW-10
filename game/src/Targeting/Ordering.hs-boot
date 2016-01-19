@@ -1,6 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 
-module Ordering where
+module Targeting.Ordering where
 
 import Control.Monad
 import Data.Monoid

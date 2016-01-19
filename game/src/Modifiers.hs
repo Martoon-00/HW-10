@@ -14,7 +14,18 @@ import {-# SOURCE #-} Unit.Variety
 type ModB  =  ExpireCond -> Modifier
 
 healthMult :: Double -> ModB
-healthMult coef  =  Modifier 10 $ liftIso hp $ from $ (#*) coef
+healthMult coef  =  Modifier 10 $ lens get set
+  where
+    get u    =  u & hp %~ ( * 3)
+    set _ n  =  n & hp %~ ( `div` 3)
+
+mirrage :: Int -> ModB
+mirrage coef  =  Modifier 10 $ lens get set
+  where
+    get :: FakeUnit -> FakeUnit
+    get u    =  u & hp %~ id -- (* coef) 
+    set :: FakeUnit -> FakeUnit -> FakeUnit
+    set u n  =  n & hp -~ (u^.hp - n^.hp)  -- * (coef - 1)
 
 incomingDamageMult :: Double -> ModB
 incomingDamageMult coef  =  Modifier 10 $ lens id $ set

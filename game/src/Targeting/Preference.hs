@@ -1,6 +1,6 @@
 {-# LANGUAGE InstanceSigs, RankNTypes #-}
 
-module Preference where
+module Targeting.Preference where
 
 import Data
 import Data.Bifunctor
@@ -9,7 +9,7 @@ import Data.List
 import Control.Lens
 import Data.Tuple
 import Random
-import Ordering
+import Targeting.Ordering
 import Control.Monad.Reader
 import Data.Function.Pointless
 import Data.Function

@@ -10,7 +10,7 @@ import Control.Lens
 import Data
 import LensM
                              
-instance Stat HitPoints where
+instance Stat HitPoints Int where
     statValue (HP k)          =  k
     statWrap                  =  HP
     statName  _               =  "HP"
@@ -20,7 +20,7 @@ instance Stat HitPoints where
         | otherwise           =  Dull
     statMaxDigits _           =  4
 
-instance Stat ManaPoints where
+instance Stat ManaPoints Int where
     statValue (MP k)          =  k
     statWrap                  =  MP
     statName  _               =  "MP"
@@ -30,7 +30,7 @@ instance Stat ManaPoints where
 --        | otherwise                   =  Dull
     statMaxDigits _           =  4
 
-instance Stat DamageValue where
+instance Stat DamageValue Int where
     statValue (Dmg k)         =  k
     statWrap                  =  Dmg
     statName  _               =  "Eff"
@@ -38,14 +38,14 @@ instance Stat DamageValue where
     statColorIntensity _      =  Dull
     statMaxDigits _           =  3
 
-instance Stat Cooldown where
+instance Stat Cooldown Int where
     statValue (CD k)          =  fromInteger k
     statWrap                  =  CD . toInteger
     statName  _               =  "CD"
     statColor _               =  Yellow
     statMaxDigits _           =  4
 
-instance Stat ManaConsumption where
+instance Stat ManaConsumption Int where
     statValue (MC k)          =  k
     statWrap                  =  MC
     statName  _               =  "MC"
@@ -53,6 +53,13 @@ instance Stat ManaConsumption where
     statColorIntensity _      =  Dull
     statMaxDigits _           =  3
 
+instance Stat Visibility Bool where
+    statValue (Vis k)         =  k
+    statWrap                  =  Vis
+    statName  _               =  "Visibility"
+    statColor _               =  Blue
+    statColorIntensity _      =  Dull
+    statMaxDigits _           =  9
 
 instance TimeUnit Cooldown where
     toMicroseconds (CD t)  =  t * ticCD

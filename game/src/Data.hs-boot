@@ -1,4 +1,9 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Data where
 
@@ -11,7 +16,7 @@ import Data.Array.IO
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
-import {-# SOURCE #-} Ordering
+import {-# SOURCE #-} Targeting.Ordering
 import {-# SOURCE #-} Unit.Type
 import Data.Monoid
 import Control.Concurrent.STM.TVar
@@ -26,38 +31,7 @@ data ManaConsumption  =  MC Int
 data DamageValue      =  Dmg Int
 data Cooldown         =  CD Integer
                               
-class Stat s where
-    statValue :: s -> Int
-
-    statWrap :: Int -> s
-
-    statModify :: (Int -> Int) -> (s -> s)
-    statModify f  =  statWrap . f . statValue
-
-    statVal :: (Functor f) => (Int -> f Int) -> s -> f s
-    statVal  =  lens statValue (const statWrap)
-
-    statName :: s -> String
-
-    statColor :: s -> Color
-    statColor _  =  White
-
-    statColorExt :: Stats -> s -> Color
-    statColorExt _  =  statColor
-
-    statColorIntensity :: s -> ColorIntensity
-    statColorIntensity _  =  Vivid
-
-    statColorIntensityExt :: Stats -> s -> ColorIntensity
-    statColorIntensityExt _  =  statColorIntensity
-
-    statMaxDigits :: s -> Int
-
-    printStatExt :: Stats -> s -> IO ()
-    printStatExt stats s  =  do
-        setSGR [SetColor Foreground (statColorIntensityExt stats s) (statColorExt stats s)]
-        putStr $ statName s ++ ": " ++ extend (statMaxDigits s) ' ' (show $ statValue s)
-        setSGR []
+class Stat s v | s -> v where
 
 
 data Stats

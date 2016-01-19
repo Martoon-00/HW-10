@@ -1,6 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TupleSections #-}
 
-module Relation where
+module Targeting.Selection where
 
 import Data
 import Data.Function
@@ -12,7 +13,7 @@ import Functions
 import StatsLens
 
 niceGuy :: Relation -> Bool
-niceGuy  =  ( /= Enemy)  -- thanks, cap
+niceGuy  =  ( /= Enemy)  
 
 relationOf :: Unit -> Unit -> Relation
 relationOf u1 u2 
@@ -34,8 +35,38 @@ selectWithRelation :: Relation -> TargetSelection
 selectWithRelation rel _  =  All . ( == rel) .: relationOf 
 
 selectNotDead :: TargetSelection
-selectNotDead _ _  =  All . not . (^.dead)
+selectNotDead  =  selectWithAboveZero hp
 
 selectWithAboveZero :: Lens' Unit Int -> TargetSelection
 selectWithAboveZero stat _ _ target  =  All $ target^.stat > 0
+
+
+runSelectionOption :: SelectionOption -> TargetSelection
+runSelectionOption Alive   _ _ t  =  All $ t^.alive
+runSelectionOption Visible _ _ t  =  All $ t^.visible
+
+select :: (Skill -> Caster -> Target -> Bool) -> ExtendedSelection
+select  =  fmap include $ fmap . fmap . fmap $ All
+
+include :: TargetSelection -> ExtendedSelection
+include  =  ( , []) . pure 
+
+disable :: SelectionOption -> ExtendedSelection
+disable  =  ([], ) . pure
+
+runExtendedSelection :: ExtendedSelection -> [SelectionOption] -> TargetSelection
+runExtendedSelection (selection, disabled) defs  = 
+    let enabled  =  runSelectionOption <$> filter (not . ( `elem` disabled)) defs
+    in  (++) selection enabled ^. traversed 
+
+
+
+
+
+
+    
+
+    
+
+
 
