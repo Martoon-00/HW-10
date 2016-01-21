@@ -3,3 +3,4 @@ Unit: mana leak + rampage
 
 invisibility and coup-de-grace for rogue
 
+mind freeze and stun

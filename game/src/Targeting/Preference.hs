@@ -13,6 +13,7 @@ import Targeting.Ordering
 import Control.Monad.Reader
 import Data.Function.Pointless
 import Data.Function
+import Data.Default
 
 data ListSortPostProcess  =  SavePostProcess  
                           |  RevertPostProcess
@@ -30,12 +31,12 @@ buildTargetPrefer :: TargetPrefer -> LockedTargets -> [Unit] -> IO [Unit]
 buildTargetPrefer  =  buildOrderT .: runReaderT
 
 buildTargetPreferWay :: TargetPreferWay -> TargetPrefer                                                       
-buildTargetPreferWay (PreferId filterUnitId)              =  lift $ extract ((== filterUnitId) . _unitId) >>= push
-buildTargetPreferWay (PreferLocked)                       =  do
+buildTargetPreferWay (PreferId filterUnitId)              =  lift $ extract (( == filterUnitId) . _unitId) >>= push
+buildTargetPreferWay PreferLocked                         =  do
     locked <- ask
     lift $ extract (( `elem` locked) . _unitId) >>= push
 
-buildTargetPreferWay (PreferType neededUnitType orderPref)   =  do
+buildTargetPreferWay (PreferType neededUnitType orderPref)  =  do
     items <- lift $ extract $ ( == neededUnitType) . _unitType
     sorted <- liftIO $ buildOrderPref orderPref items
     lift $ push sorted
@@ -47,4 +48,5 @@ buildTargetPreferWay (PreferNoGroup orderPref)            =  do
 
 buildTargetPreferWay NoNextTarget                         =  do
     lift $ void $ extract $ const True
+
 

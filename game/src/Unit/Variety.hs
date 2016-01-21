@@ -1,12 +1,20 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
-module Unit.Variety where
+module Unit.Variety 
+    ( initStats
+    , unitSkills
+    , unitCost
+    , defTargetPrefer
+    , availableUnits
+    )
+where
 
 import Stats
 import Control.Lens
 import Data
 import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import Data.Monoid
 import Targeting.Selection
 import Unit.Type
@@ -19,6 +27,7 @@ import Buff
 import LensM
 import Modifiers
 import Functions
+import qualified Data.Foldable as F
 
 
 initStats :: UnitType -> Stats                   
@@ -94,8 +103,8 @@ unitSkills Catapult  =
     ]
 unitSkills Witch  =  
     [ Skill 
-        { skillAction  =  onTarget $ over (revStat hp) ( + 1)  
-        , skillSideEffect  =  noAction
+        { skillAction  =  onTarget $ over (revStat hp) ( + 1)
+        , skillSideEffect  =  const $ const . F.sequence_ . (^?casting._Just.interrupt)
         , skillName = "Punch"
         , skillInfluence  =  NegativeInfluence
         , skillTargetSelection  =  include $
@@ -197,6 +206,7 @@ simpleSkill name stat influence targets dmg cd mc  =  Skill
     modifyStat PositiveInfluence  =  (+)
     
 
+-- TODO: 
 -- Soul eater (on kill restores hp and increases mp, dmg scales with mp, mc = 0)
 
 unitCost :: UnitType -> Int   
@@ -233,10 +243,13 @@ availableUnits :: [UnitType]
 availableUnits  =  [minBound .. maxBound]
 
 onTarget :: AccessibleInto m => (Target -> Unit) -> Action m
-onTarget f _ target  =  over (forUnit $ _unitId target) $ f  
+onTarget f _ target  =  over (forUnit $ _unitId target) f  
+
+onTarget' :: (Target -> STM Unit) -> Action STM
+onTarget' f _ target  =  over (forUnit' $ _unitId target) f  
 
 onSelf :: AccessibleInto m => (Target -> Unit) -> Action m
-onSelf f caster _  =  over (forUnit $ _unitId caster) $ f  
+onSelf f caster _  =  over (forUnit $ _unitId caster) f  
 
 noAction :: AccessibleInto m => Action m
 noAction _ _ _  =  return ()

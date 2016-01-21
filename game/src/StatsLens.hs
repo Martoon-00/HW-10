@@ -86,12 +86,13 @@ instance WithStats Unit where
     makeBoolStat stat  =  bakeStat (makeBoolStat stat)
 
     fakeNewUnit Unit{ _unitType = t }  =  Unit 
-        { _unitType = t
-        , _stats    = initStats t
-        , _side     = undefined
-        , _casting  = undefined
-        , _unitId   = undefined
-        , _unitLog  = undefined
+        { _unitType   = t
+        , _stats      = initStats t
+        , _side       = undefined
+        , _casting    = undefined
+        , _unitId     = undefined
+        , _unitLog    = undefined
+        , _unitPrefer = undefined
         }
 
 

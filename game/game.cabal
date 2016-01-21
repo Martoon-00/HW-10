@@ -20,7 +20,7 @@ library
     Functions, Hunt, LensM, Modifiers, Targeting.Ordering,
     Targeting.Preference, Random, Targeting.Selection, Stats, StatsLens, 
     Unit.Common, Unit.Variety, Unit.Type,
-    Viz.Field
+    Viz.Field, Viz.DefineCache, Viz.Gather, Viz.Common
   build-depends:       
       base >= 4.7 && < 5
     , random
@@ -40,6 +40,7 @@ library
     , data-default
     , ansi-terminal 
     , utility-ht   
+    , vector
     , vty
     , brick
   default-language:    Haskell2010

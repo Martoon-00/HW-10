@@ -29,28 +29,37 @@ import Unit.Type
 import Data.Monoid
 import FieldAccess
 import StatsLens
+import Data.Default
           
 
-newCasting :: Skill -> IO Casting
-newCasting skill  =  do
+newCasting :: Skill -> InterruptHandler -> IO Casting
+newCasting skill interrupt  =  do
     let duration = skill^.cd
     start <- getPOSIXTime
-    return $ Casting skill $ do   -- count fraction of cast progress, depending on access time
+    return $ Casting skill interrupt $ do   
+        -- count fraction of cast progress, depending on access time
         cur <- getPOSIXTime     
         let durationMcs = fromIntegral $ toMicroseconds $ duration
         let res = fromIntegral (round $ (cur - start) * 10^6 :: Integer) / durationMcs :: Double
         return $ max 0 $ min 1 res
 
-newDefUnit :: Side -> UnitType -> Int -> IO Unit
+newDefUnit :: Side -> UnitTemplate -> Int -> IO Unit
 newDefUnit s t i  =  do
     unitLog     <- createUnitLog (0 :: Second) ""
-    return Unit { _unitType = t
-                , _stats    = initStats t
-                , _side     = s
-                , _casting  = Nothing 
-                , _unitId   = i
-                , _unitLog  = unitLog
-                } 
+    return Unit { _unitType   = _unitTypeT t
+                , _stats      = initStats $ _unitTypeT t
+                , _side       = s
+                , _casting    = Nothing 
+                , _unitId     = i
+                , _unitLog    = unitLog
+                , _unitPrefer = _unitPreferT t
+                }
+
+defTemplate :: UnitType -> UnitTemplate 
+defTemplate t  =  UnitTemplate
+    { _unitTypeT = t
+    , _unitPreferT = defTargetPrefer t
+    }
                                              
 oppositeSide :: Side -> Side       
 oppositeSide LeftSide   =  RightSide
@@ -90,6 +99,8 @@ instance Display Unit where
                                                            
 instance Show Unit where
     show  =  show . _unitType
+
+
 
 
 

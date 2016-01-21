@@ -59,6 +59,7 @@ liftLensM pureLens = lens getM setM
 lensM :: (Functor f, Monad m) => LensLike f a (m b) a b
 lensM mapper  =  fmap return . mapper
 
+
 liftIso :: Lens s s a a -> Iso' a a -> Iso' s s
 liftIso l i  =  iso (up i) (up $ from i)
   where

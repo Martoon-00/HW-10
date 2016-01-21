@@ -49,4 +49,8 @@ instance AccessibleInto IO where
 
     forUnit uid  =  (\f s -> atomically <$> f s) . forUnit uid 
     
+forUnit' :: UnitId -> Setter Field (STM ()) Unit (STM Unit)
+forUnit' uid  =  sets $ \mapper field -> 
+    let !unitTVar = units field A.! uid 
+    in readTVar unitTVar >>= mapper >>= writeTVar unitTVar
 

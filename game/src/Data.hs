@@ -135,12 +135,13 @@ type ExpireCond  =  Target -> IO Bool
 ----- unit -----
 ----------------
 
-data Unit  =  Unit { _unitType :: UnitType
-                   , _stats    :: Stats
-                   , _side     :: Side
-                   , _casting  :: Maybe Casting
-                   , _unitId   :: UnitId
-                   , _unitLog  :: UnitLog
+data Unit  =  Unit { _unitType   :: UnitType
+                   , _stats      :: Stats
+                   , _side       :: Side
+                   , _casting    :: Maybe Casting
+                   , _unitId     :: UnitId
+                   , _unitLog    :: UnitLog
+                   , _unitPrefer :: TargetPrefer
                    }
 
 data Side  =  LeftSide
@@ -148,8 +149,11 @@ data Side  =  LeftSide
     deriving (Enum, Show, Eq, Ord)
        
 type UnitId  =  Int
+
+type InterruptHandler  =  IO ()
                     
 data Casting  =  Casting { _castSkill :: Skill
+                         , _interrupt :: InterruptHandler
                          , _progress  :: IO Double
                          }
 
@@ -159,6 +163,10 @@ data UnitLog  =  UnitLog { _logText :: IO String
 data FakeUnit  =  FakeUnit { _unitTypeF :: UnitType
                            , _statsF    :: Stats
                            }
+
+data UnitTemplate  =  UnitTemplate { _unitTypeT :: UnitType
+                                   , _unitPreferT :: TargetPrefer
+                                   }
 
 -----------------
 ----- field -----
@@ -214,6 +222,13 @@ type LockedTargets  =  [UnitId]
 type TargetPrefer  =  ReaderT LockedTargets (OrderT [Unit] IO) ()
 
 
+----------------
+----- misc -----
+----------------
+
+type Cache  =  Int
+    
+
 ------------
 -- lenses --
 ------------
@@ -227,6 +242,7 @@ makeLensesFor [ ("_hp", "__hp__")
               ] ''Stats
 makeLenses ''Unit                        
 makeLenses ''FakeUnit                        
+makeLenses ''UnitTemplate                        
 makeLenses ''Casting
 makeLenses ''UnitLog
 makeLenses ''Buff

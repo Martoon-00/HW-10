@@ -1,7 +1,13 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 
-module Viz.Field where
+module Viz.Field
+    ( battleV,
+      FieldEvent(FinishField, SetMessage)
+
+    ) 
+where
 
 import Brick
 import Field
@@ -21,17 +27,79 @@ import Graphics.Vty.Input.Events
 import Graphics.Vty.Attributes
 import Brick.Widgets.Center
 import Data.Maybe
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TVar
+import Control.Concurrent.Chan
+import Graphics.Vty.Input.Events
+import Graphics.Vty
+import Viz.Common
+import Data.IORef
+import Control.Monad.Fix
+import Control.Concurrent
 
-renderField :: Field -> IO Widget
-renderField field  =  do
+data FieldEvent  =  FEvent Event
+                 |  UpdateField
+                 |  FinishField
+                 |  SetMessage (Maybe String)
+
+data FieldState  =  FS 
+    { _fieldL   :: Field
+    , _snapshot :: Widget
+    , _message  :: Maybe String
+    }
+
+makeLenses ''FieldState
+
+battleV :: Field -> Chan FieldEvent -> IO () -> IO ()
+battleV field chan finished  =  do
+    stopped <- newIORef False
+    forkIO $ fix $ \cont -> do
+        writeChan chan UpdateField
+        threadDelay $ 2 * 10^4
+        stop <- readIORef stopped
+        unless stop cont
+        
+    void $ liftIO $ customMain (mkVty def) chan app $ FS 
+        { _fieldL = field
+        , _snapshot = emptyWidget
+        , _message  = Nothing
+        }
+
+    writeIORef stopped True
+    finished
+
+
+app :: App FieldState FieldEvent
+app  =  App 
+    { appDraw = pure . gameLimit . (^.snapshot)
+    , appChooseCursor = neverShowCursor
+    , appHandleEvent = handleEvent 
+    , appStartEvent = return
+    , appAttrMap = const def 
+    , appLiftVtyEvent = FEvent
+    }
+  where
+    handleEvent s (FEvent (EvKey KEsc _))  
+                                        =  halt s
+    handleEvent s (FEvent (EvKey _ _))  =  continue s
+    handleEvent s (FEvent _)            =  continue s
+    handleEvent s FinishField           =  halt s
+    handleEvent s UpdateField           =  liftIO (takeSnapshot s) >>= continue
+    handleEvent s (SetMessage m)        =  continue $ s & message .~ m
+
+takeSnapshot :: FieldState -> IO FieldState
+takeSnapshot s  =  (s & ) . (snapshot .~ ) <$> renderField s
+
+renderField :: FieldState -> IO Widget
+renderField s  =  do
+    let field = s^.fieldL
     units <- fieldUnits field
     let sides = partition (( == LeftSide) . _side) units
 
-    sideWidgets <- mapM renderSide $ sides^.both.to pure
-    let [wl, wr] = sideWidgets
-
-    return $ hBox sideWidgets 
-
+    [leftWidget, rightWidget] <- mapM renderSide $ sides^.both.to pure
+    let messageWidget = center . str . fromMaybe " " $ s^.message
+    let result = hBox [leftWidget, messageWidget, rightWidget]
+    return result 
   where
     renderSide :: [Unit] -> IO Widget
     renderSide units = do
@@ -55,7 +123,7 @@ renderUnit u  =  do
         body = row1 <=> row2
     
     return $ updateAttrMap (applyAttrMappings unitAttrs) 
-           $ hLimit 70 
+           $ hLimit 55 
            $ borderWithLabel label body
   where
     unitAttrs  =   
@@ -71,7 +139,7 @@ renderUnit u  =  do
         , (progressIncompleteAttr, bg $ rgbColor 50 0 0)
        ]
     mpAttrs  = 
-        [ (mempty, fg $ rgbColor 100 100 255)
+        [ (mempty, fg $ rgbColor 200 150 150)
         , (progressCompleteAttr, bg $ rgbColor 0 0 150)
         , (progressIncompleteAttr, bg $ rgbColor 0 0 50)
        ]
@@ -88,30 +156,3 @@ alignRight size  =  T.unpack . T.justifyRight size ' ' . T.pack
 
 alignLeft :: Int -> String -> String
 alignLeft size  =  T.unpack . T.justifyLeft size ' ' . T.pack
-
-data FieldEvent  =  FEvent Event
-                 |  UpdateField
-                 |  FinishField
-
-type FieldState  =  Widget
-
-
-fieldApp :: Field -> App FieldState FieldEvent
-fieldApp field  =  App 
-    { appDraw = pure
-    , appChooseCursor = neverShowCursor
-    , appHandleEvent = handleEvent field
-    , appStartEvent = return
-    , appAttrMap = const def 
-    , appLiftVtyEvent = FEvent
-    }
-  where
-    handleEvent f s (FEvent (EvKey _ _))  =  halt s
-    handleEvent f s (FEvent _)            =  continue s
-    handleEvent f s FinishField           =  halt s
-    handleEvent f s UpdateField           =  liftIO (renderField f) >>= continue
-
-
-
-
-

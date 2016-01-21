@@ -19,7 +19,7 @@ import Data.Array.IO
 import Unit.Type
 import qualified Data.Array.IArray as A
 
-fillField :: ([UnitType], [UnitType]) -> IO Field
+fillField :: ([UnitTemplate], [UnitTemplate]) -> IO Field
 fillField (l, r)  =  do                                
     let li = zip [1 ..] l
     let ri = zip [length li + 1 ..] r

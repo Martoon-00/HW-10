@@ -26,6 +26,7 @@ import StatsLens
 import Data.Time.Units       
 import Control.Concurrent.STM
 import Targeting.Selection
+import Text.Printf
 
 
 fight :: Field -> Unit -> StateT LockedTargets IO ()
@@ -99,13 +100,13 @@ fight field caster'  =  do
     initAttack skill  =  do         
         -- init casting
         setTargets
-        cast   <- liftIO $ newCasting skill 
-        liftIO $ field & forUnit uid.casting .~ Just cast
         castBox <- liftIO newEmptyMVar 
+        cast   <- liftIO $ newCasting skill $ putMVar castBox CastInterrupted
+        liftIO $ field & forUnit uid.casting .~ Just cast
 
         preTargets <- get
         liftIO $ log $ mappend "Casting at  " $ concat 
-            $ map (\u -> "#" ++ show u ++ "  ") $ sort preTargets
+            $ printf "#%d  " <$> sort preTargets
 
         -- get CastSuccess when cast is completed
         liftIO $ void $ forkIO $ waitForSuccess $ putMVar castBox
@@ -211,5 +212,7 @@ fight field caster'  =  do
                 forM_ targetsId $ (=<<) applySkill . unitById field
 
 
-
+stopFight :: Field -> UnitId -> IO ()
+stopFight field uid  =  do
+    field & forUnit uid.casting .~ Nothing
 

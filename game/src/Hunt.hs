@@ -1,171 +1,128 @@
 module Hunt where
 
-import System.Console.ANSI
-import Control.Monad
+import Control.Arrow
 import Control.Concurrent
-import Data.Time.Units
-import Stats
-import Unit.Variety
-import Unit.Common
-import Display
-import Control.Lens
-import Control.Monad.State
-import Control.Monad
-import Text.Read.HT
-import Data.Maybe
-import Field
-import Data
-import Control.Lens.Traversal
-import Data.Array.IO
 import Control.Concurrent.Async
+import Control.Concurrent.MVar
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TVar
+import Control.Lens
+import Control.Lens.Traversal
+import Control.Monad
+import Control.Monad.State
+import Control.Monad.Trans
+import Control.Monad.Trans.Maybe
+import Data.Array.IO
+import Data.Char
+import Data.Default
 import Data.List
 import Data.Monoid
-import Data.Char
-import Unit.Type
-import Unit.Attack
-import StatsLens
-import Control.Arrow
-import Control.Parallel.Strategies
-import FieldAccess
-import Graphics.Vty.Input.Events
-import Graphics.Vty
+import Data.Maybe
+import Text.Printf
+
 import Brick
+import Data.Time.Units
+import Graphics.Vty
+import Graphics.Vty.Input.Events
+import System.Console.ANSI
+import Text.Read.HT
+
+import Data
+import Field
+import FieldAccess
+import Stats
+import StatsLens
+import Targeting.Preference
+import Viz.DefineCache
 import Viz.Field
-import Data.Default
+import Viz.Gather
+import Unit.Attack
+import Unit.Common
+import Unit.Type
+import Unit.Variety
 
 battle :: IO ()
 battle  =  do
     setTitle "Battle field"
-    prepare >>= fillField >>= startBattle
+--    void $ runMaybeT $ 
+--        prepare >>= fmap lift fillField >>= fmap lift startBattle
+
+epicTest :: IO ()
+epicTest  =  (=<<) startBattle $ fillField $ ([Warrior, Archer], [TrainingTarget]) & both.traversed %~ defTemplate
+    -- void $ runMaybeT $ gatherUnitsV 10000
+    -- runMaybeT (defineCacheV 100) >>= print
+
     
 startBattle :: Field -> IO ()
 startBattle field  =  do
-    allUnits <- fieldUnits field
-    fights <- forM allUnits $ \unit -> do
-        let startedFight = fight field unit
-        async $ evalStateT startedFight []
+    (sendEvent, finished) <- startDisplaying field
 
-    stopDispListener <- newEmptyMVar
-    displaying <- async $ displayField field $ isJust <$> tryTakeMVar stopDispListener -- take care! mutable arrays are in danger!
-    winner <- waitForFightEnd field $ mapM_ cancel fights
-              
-    putMVar stopDispListener ()
-    -- wait displaying
+    forkIO $ do
+        sequence $ ( >> threadDelay (10 * 10^5)) . sendEvent . 
+            SetMessage . Just . printf "Battle will start in %d..." <$> 
+            ([3, 2..1] :: [Int])
+        sendEvent $ SetMessage $ Nothing
+    
+        allUnits <- fieldUnits field
+        fights <- (>>=) (fieldUnits field) $ mapM $ 
+            async . flip evalStateT [] . fight field
+    
+        winner <- flip evalStateT (0, 0) 
+                $ runMaybeT
+                $ waitForFightEnd field 
+        mapM_ cancel fights
+        (>>=) (fieldUnits field) $ mapM $ stopFight field . _unitId
+                  
+        sendEvent $ SetMessage $ Just 
+            $ printf "Finish! %s team wins!" 
+            $ case winner of
+                Nothing        -> "No"
+                Just LeftSide  -> "Left"
+                Just RightSide -> "Right"
+        threadDelay $ 3 * 10^6
+        sendEvent $ FinishField
+    takeMVar finished
+    -- if interrupted with Esc, battle threads may continue in background
 
-    putStrLn $ (\w -> "Finish! " ++ w ++ " team wins!") 
-        $ case winner of
-            LeftSide   -> "Left"
-            RightSide  -> "Right"
-    threadDelay $ 10^6
+type TicksPassed  =  Int
+type SumHealth    =  Int
 
-waitForFightEnd :: Field -> IO () -> IO Side
-waitForFightEnd field onEnd  =  do
-    threadDelay 100000
-    armies <- partition (( == LeftSide)  . _side) <$> fieldUnits field
+waitForFightEnd :: Field -> MaybeT (StateT (SumHealth, TicksPassed) IO) Side
+waitForFightEnd field  =  do
+    liftIO $ threadDelay checkDelay
+    allUnits <- liftIO $ fieldUnits field
+    let armies = partition (( == LeftSide)  . _side) $ allUnits
+    -- count total units health, if remain unchanged for too long then finish battle 
+    let totalHp = sumOf (folded.hp) allUnits
+        modifyHpCounter s = fromMaybe (totalHp, 0) $ do
+            let (totalHp, tics) = s
+            return (totalHp, tics + 1)     
+    lift $ get >>= put. modifyHpCounter
+    lift get >>= guard . ( < secondsTillDraw * (10^6) `div` checkDelay) . snd
     -- assuming that only one team can win 
     let courpses = armies & both.traversed %~ identifyCourpse 
-    let loosers  = courpses & both %~ (fmap head . sequence)   
-    let defeated = getAlt $ loosers^.both.to Alt   
+        loosers  = courpses & both %~ (fmap head . sequence)   
+        defeated = getAlt $ loosers^.both.to Alt   
     if isJust defeated
-        then onEnd >> return (oppositeSide $ fromJust defeated)
-        else waitForFightEnd field onEnd
-
+        then liftIO $ return (oppositeSide $ fromJust defeated)
+        else waitForFightEnd field 
   where
     identifyCourpse unit = if unit^.dead
         then Just $ unit^.side
         else Nothing
 
-screenSize :: Int
-screenSize = 1000
+    checkDelay = 100000
 
-displayField :: Field -> IO Bool -> IO ()
-displayField field stopCheck  =  do
-    chan <- newChan
-    forkIO $ void $ customMain (mkVty def) chan (fieldApp field) emptyWidget
-    fix $ \f -> do
-        writeChan chan UpdateField
-        threadDelay 10000
-        stop <- stopCheck 
-        if stop
-            then writeChan chan FinishField
-            else f
-
-prepare :: IO ([UnitType], [UnitType])
-prepare  =  do
-    initCache <- defineCash
-    putStrLn "Available unit types:"
-    sequence_ $ map putStrLn $ zipWith (\i u -> replicate 8 ' ' ++ show i ++ ". " ++ show u ++ " [$" ++ show (unitCost u) ++ "]") [0 ..] availableUnits
-    gatherUnits initCache
-
-type Cache  =  Int
-    
-defineCash :: IO Cache
-defineCash  =  do
-    putStrLn "Define initial cache: "
-    row <- getLine
-    if all isSpace row
-        then return 1000
-    else do
-        let cash = maybeRead row :: Maybe Cache
-        if isJust cash
-            then do
-                let cash_ = fromJust cash
-                if cash_ >= minCash
-                    then return $ cash_
-                    else do
-                        putStrLn $ "At least $" ++ show minCash ++ " please"
-                        defineCash
-        else do
-             putStrLn "Invalid number"
-             defineCash
-  where
-    minCash = 50
+    secondsTillDraw = 20
 
 
-gatherUnits :: Cache -> IO ([UnitType], [UnitType])
-gatherUnits cache  =  do
-    res <- execStateT (gatherUnitsFor LeftSide) (([], cache), ([], cache))
-    return $ res & both %~ fst
+type SendEvent  =  FieldEvent -> IO ()
 
-gatherUnitsFor :: Side -> StateT (([UnitType], Cache), ([UnitType], Cache)) IO ()
-gatherUnitsFor side  =  do
-    cur <- get
-    let cash = cur ^. branch . _2
-
-    liftIO $ putStrLn $ show (fromEnum side + 1) ++ "-st player choice: ($" ++ show cash ++ " remaining)"
-    line <- liftIO $ getLine
-    if any ( == line) $ ["stop", "done", "ok"]
-        then do
-            cur <- get 
-            when (getAny $ cur ^. both . _1 . to null . to Any) $ do
-                liftIO $ putStrLn "Armies should not be empty" 
-                again                                            
-    else if any ( == line) $ ["no", "none", "skip", "-"]
-        then continue
-    else
-        let no = (maybeRead line :: Maybe Int) in
-        if isJust no && fromJust no >= 0 && fromJust no < length availableUnits
-            then do      
-                let t = availableUnits !! (fromJust no)
-                let cost = unitCost t
-                if cost <= cash
-                    then do
-                        put $ cur & branch %~ bimap ( ++ [t]) (flip (-) cost)
-                        liftIO $ return ()
-                        continue
-                    else do
-                        liftIO $ putStrLn "Not enough cache"
-                        again
-            else do
-                liftIO $ putStrLn "Incorrect unit id"
-                again
-  where 
-    branch :: (Functor f, Field1 s t a b, Field2 s t a b) => (a -> f b) -> s -> f t
-    branch = case side of
-        LeftSide  -> _1
-        RightSide -> _2
-    
-    again = gatherUnitsFor side
-    continue = gatherUnitsFor $ oppositeSide side
+startDisplaying :: Field -> IO (SendEvent, MVar ())
+startDisplaying field  =  do
+    evChan <- newChan
+    finished <- newEmptyMVar
+    forkIO $ battleV field evChan $ putMVar finished ()
+    return $ (writeChan evChan, finished)
 
 
