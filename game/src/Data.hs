@@ -138,7 +138,7 @@ type ExpireCond  =  Target -> IO Bool
 data Unit  =  Unit { _unitType   :: UnitType
                    , _stats      :: Stats
                    , _side       :: Side
-                   , _casting    :: Maybe Casting
+                   , _casting    :: CastingState
                    , _unitId     :: UnitId
                    , _unitLog    :: UnitLog
                    , _unitPrefer :: TargetPrefer
@@ -151,7 +151,11 @@ data Side  =  LeftSide
 type UnitId  =  Int
 
 type InterruptHandler  =  IO ()
-                    
+ 
+data CastingState  =  NoCast
+                   |  Cast Casting
+                   |  Stunned
+                   
 data Casting  =  Casting { _castSkill :: Skill
                          , _interrupt :: InterruptHandler
                          , _progress  :: IO Double
@@ -244,6 +248,7 @@ makeLenses ''Unit
 makeLenses ''FakeUnit                        
 makeLenses ''UnitTemplate                        
 makeLenses ''Casting
+makePrisms ''CastingState
 makeLenses ''UnitLog
 makeLenses ''Buff
 

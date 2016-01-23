@@ -28,8 +28,11 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans
 import Data.Tuple
 import Viz.Common
+import Unit.Variety
+import Control.Lens.Traversal
 
--- when user tryies to proceed with invalid cache, this temporaly sets to error message
+-- when user tryies to proceed with invalid cache, 
+-- this temporaly sets to error message
 type Nice  =  Maybe String
 
 data CacheState  =  CS 
@@ -41,7 +44,7 @@ data CacheState  =  CS
 makeLenses ''CacheState
 
 cache :: Getter CacheState (Maybe Cache)
-cache  =  editorr.to (maybeRead . head . getEditContents)
+cache  =  to (^?editorr.to getEditContents.to head._Show)
 
 defineCacheV :: Cache -> MaybeT IO Cache
 defineCacheV defCache  =  do
@@ -52,7 +55,7 @@ defineCacheV defCache  =  do
         , _escaped = False
         }
     
-    guard $ res^.escaped
+    guard $ not $ res^.escaped
     
     let c = res^.cache
     if isJust c then MaybeT $ return c else error "Invalid cache" 
@@ -72,24 +75,21 @@ app  =  App
 
 draw :: CacheState -> Widget
 draw s  =  
-    let label      = str " Define initial cache "
-        dollar     = fg green &> str "$"
-        borderBody = dollar <+> renderEditor (_editorr s)
-        border     = borderWithLabel label borderBody 
-        warning    = vLimit 1 $ fg bad &> str $ fromMaybe " " (s^.nice)
-        total      = bg cyan &> border <=> padTop (Pad 1) warning
+    let label      = white `on` cyan &> str " Define initial cache "
+        dollar     = bg green &> str "$"
+        input      = white `on` cyan &> renderEditor $ _editorr s
+        borderBody = dollar <+> input
+        border     = bad `on` cyan &> borderWithLabel label borderBody 
+        warning    = vLimit 1 $ fg red &> str $ fromMaybe " " $ s^.nice
+        total      = border <=> padTop (Pad 1) warning
         result     = center $ hLimit 30 total
     in result
   where
     bad :: Color
-    bad  =  if isNothing $ s^.nice 
+    bad  =  if hasn't (nice._Just) s                                         -- prism usage 
         then white
         else red
-    
-infixr 0 &>
-(&>) :: Attr -> Widget -> Widget
-(&>)  =  updateAttrMap . applyAttrMappings . pure . (mempty, )
-
+   
 renderLine :: String -> Widget
 renderLine  =  str
 
@@ -106,7 +106,7 @@ keysForEditor :: Event -> Bool
 keysForEditor (EvKey (KChar c) _)
     |  c >= '0' && c <= '9'  =  True
     |  otherwise             =  False
-keysForEditor (EvKey k _)  =  k `elem` 
+keysForEditor (EvKey k _)    =  k `elem` 
     [ KDel
     , KBS
     , KUp
@@ -117,13 +117,14 @@ keysForEditor (EvKey k _)  =  k `elem`
 
 handleEnter :: CacheState -> EventM (Next CacheState)
 handleEnter s  =  do
-    maybe (halt s) (continue . flip (set nice) s . Just) $ 
-        maybe (Just "") checkNice $ s^.cache 
+    maybe (halt s) (continue . flip (set $ nice) s . Just) $      
+        maybe (Just " ") checkNice $ s^.cache 
 
 checkNice :: Cache -> Nice
 checkNice c
     | c < minCache  =  Just $ "Set at least " ++ show minCache
     | otherwise     =  Nothing 
   where
-    minCache = 50
+    minCache = fromMaybe 0 $ 
+        minimumOf (traverse.to unitCost) availableUnits     -- lens usage
 

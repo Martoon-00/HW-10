@@ -63,7 +63,7 @@ instance Display Field where
             putStrLn ""
             setCursorColumn off 
             -- cast bar
-            display =<< ProgressBarFixed bar <$> fromMaybe (return 0) (unit^?casting._Just.progress)
+            display =<< ProgressBarFixed bar <$> fromMaybe (return 0) (unit^?casting._Cast.progress)
             putStr $ "   "
             -- log
             setSGR [SetColor Foreground Vivid Black]

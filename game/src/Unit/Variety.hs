@@ -31,18 +31,21 @@ import qualified Data.Foldable as F
 
 
 initStats :: UnitType -> Stats                   
-initStats TrainingTarget  =  Stats (HP  100) (MP    0) v []
+initStats TrainingTarget  =  Stats (HP  100) (MP  100) v []
 initStats Warrior         =  Stats (HP  400) (MP    0) v [] 
 initStats Archer          =  Stats (HP  200) (MP    0) v []
 initStats Mage            =  Stats (HP  120) (MP  500) v []
 initStats Recharger       =  Stats (HP  120) (MP 1000) v []
 initStats Guardian        =  Stats (HP  100) (MP    0) v [permanent $ incomingDamageMult 0.4]
-initStats Protector       =  Stats (HP   70) (MP  100) v [permanent $ manaShield 5]
+initStats Protector       =  Stats (HP   70) (MP  100) v [permanent $ manaShield 3]
 initStats Catapult        =  Stats (HP  700) (MP    0) v []
 initStats Witch           =  Stats (HP   80) (MP  650) v []
 initStats Healer          =  Stats (HP  180) (MP 1200) v []
 initStats Rogue           =  Stats (HP  180) (MP  500) v [] 
 initStats Reviver         =  Stats (HP  320) (MP 3000) v []
+initStats VapourCannon    =  Stats (HP   80) (MP 6000) v []
+initStats ManaDrainTotem  =  Stats (HP  300) (MP  100) v []
+
 
 v :: Visibility
 v  =  Vis True
@@ -103,8 +106,8 @@ unitSkills Catapult  =
     ]
 unitSkills Witch  =  
     [ Skill 
-        { skillAction  =  onTarget $ over (revStat hp) ( + 1)
-        , skillSideEffect  =  const $ const . F.sequence_ . (^?casting._Just.interrupt)
+        { skillAction  =  onTarget $ over (revStat hp) ( + 3)
+        , skillSideEffect  =  const $ const . F.sequence_ . (^?casting._Cast.interrupt)
         , skillName = "Punch"
         , skillInfluence  =  NegativeInfluence
         , skillTargetSelection  =  include $
@@ -129,31 +132,32 @@ unitSkills Healer  =
         }
     ]
 unitSkills Rogue  =  
-    [ Skill
-        { skillAction  =  (onSelf $ set visible True)
-                      <+> (onTarget $ set hp 0)
-        , skillSideEffect  =  noAction       
-        , skillName = "Coup de grace"
-        , skillInfluence  =  NegativeInfluence
-        , skillTargetSelection  =  
-            include selectBasingOnRelation
-         <> select (\_ caster _ -> caster^.visible == False) 
-        , skillMultitarget  =  1
-        , _cd  =  CD 15
-        , _mc  =  MC 0
-        }
-    , Skill
-        { skillAction  =  onTarget $ set visible False 
-        , skillSideEffect  =  noAction       
-        , skillName = "Hide"
-        , skillInfluence  =  PositiveInfluence
-        , skillTargetSelection  =  include $
-            selectWithRelation Self 
-        , skillMultitarget  =  1
-        , _cd  =  CD 1
-        , _mc  =  MC 450
-        }
-    , Skill 
+--      Skill
+--        { skillAction  =  (onSelf $ set visible True)
+--                      <+> (onTarget $ set hp 0)
+--        , skillSideEffect  =  noAction       
+--        , skillName = "Coup de grace"
+--        , skillInfluence  =  NegativeInfluence
+--        , skillTargetSelection  =  
+--            include selectBasingOnRelation
+--         <> select (\_ caster _ -> caster^.visible == False) 
+--        , skillMultitarget  =  1
+--        , _cd  =  CD 15
+--        , _mc  =  MC 0
+--        }
+--    , Skill
+--        { skillAction  =  onTarget $ set visible False 
+--        , skillSideEffect  =  noAction       
+--        , skillName = "Hide"
+--        , skillInfluence  =  PositiveInfluence
+--        , skillTargetSelection  =  include $
+--            selectWithRelation Self 
+--        , skillMultitarget  =  1
+--        , _cd  =  CD 1
+--        , _mc  =  MC 450
+--        }
+--    , 
+    [ Skill 
         { skillAction  =  noAction
         , skillSideEffect  =  applyEffect (CD 30) neverExpires $ onTarget $ over (revStat hp) ( + 1)
         , skillName  =  "Poison"
@@ -168,7 +172,7 @@ unitSkills Rogue  =
 unitSkills Reviver  =  
     [ Skill 
         { skillAction  =  onTarget (set hp 100)
-        , skillSideEffect  =  applyBuff $ healthMult 3 <$> expiresIn (CD 50)
+        , skillSideEffect  =  noAction  -- applyBuff $ healthMult 3 <$> expiresIn (CD 50)
         , skillName  =  "Raise"
         , skillInfluence  =  PositiveInfluence
         , skillTargetSelection  =  
@@ -178,6 +182,79 @@ unitSkills Reviver  =
         , skillMultitarget  =  1
         , _cd  =  CD 40
         , _mc  =  MC 200
+        }   
+    ]
+unitSkills VapourCannon  =  
+    [ Skill
+        { skillAction  =  noAction
+        , skillSideEffect  =  applyBuff $ incomingDamageMult 0.2 <$> expiresIn (CD 1000)       
+        , skillName = "Steel shell"
+        , skillInfluence  =  NegativeInfluence
+        , skillTargetSelection  =  include $
+            selectWithRelation Self
+        , skillMultitarget  =  1
+        , _cd  =  CD 5
+        , _mc  =  MC 5400
+        }
+    , Skill 
+        { skillAction  =  onTarget $ over hp $ subtract 200
+        , skillSideEffect  =  noAction
+        , skillName  =  "Vapour strike"
+        , skillInfluence  =  NegativeInfluence
+        , skillTargetSelection  =  include $
+            selectBasingOnRelation 
+        , skillMultitarget  =  3
+        , _cd  =  CD 50
+        , _mc  =  MC 3000
+        }   
+    , Skill
+        { skillAction  =  (onTarget $ over hp $ subtract 15)
+                      <+> (onSelf   $ over mp $ ( + 200))
+        , skillSideEffect  =  noAction       
+        , skillName = "Charging strike"
+        , skillInfluence  =  NegativeInfluence
+        , skillTargetSelection  =  include $
+            selectBasingOnRelation
+        , skillMultitarget  =  1
+        , _cd  =  CD 30
+        , _mc  =  MC 0
+        }
+    ]
+unitSkills ManaDrainTotem  =  
+    [ Skill
+        { skillAction  =  noAction
+        , skillSideEffect  =  applyEffect (CD 8) neverExpires $ onTarget $ over mp ( + 1)
+        , skillName = "Rainbow beems"
+        , skillInfluence  =  PositiveInfluence
+        , skillTargetSelection  =  include $
+            selectWithRelation Ally
+        , skillMultitarget  =  multiTargetInf
+        , _cd  =  CD 30
+        , _mc  =  MC 100
+        }
+    , Skill
+        { skillAction  =  (onTarget $ over mp $ ( + 30))
+        , skillSideEffect  =  noAction       
+        , skillName = "Redirect energy"
+        , skillInfluence  =  PositiveInfluence
+        , skillTargetSelection  =  
+            (include $ selectWithRelation Ally)
+         <> (select  $ const $ const $ ( > 20) . (^.revStat mp))
+        , skillMultitarget  =  1
+        , _cd  =  CD 7
+        , _mc  =  MC 10
+        }
+    , Skill 
+        { skillAction  =  (onTarget $ over mp $ subtract 30)
+                      <+> (onSelf   $ over mp $ ( + 10))
+        , skillSideEffect  =  noAction
+        , skillName  =  "Mana drain"
+        , skillInfluence  =  NegativeInfluence
+        , skillTargetSelection  =  include $
+            selectBasingOnRelation
+        , skillMultitarget  =  1
+        , _cd  =  CD 20
+        , _mc  =  MC 0
         }   
     ]
 
@@ -222,6 +299,8 @@ unitCost Witch           =  200
 unitCost Healer          =  220
 unitCost Rogue           =  170
 unitCost Reviver         =  300
+unitCost VapourCannon    =  500
+unitCost ManaDrainTotem  =  160
 
 
 multiTargetInf :: Int
@@ -236,7 +315,10 @@ defTargetPrefer t  =  do
 
     targetPrefer :: UnitType -> TargetPrefer    
     targetPrefer Rogue       =  return ()
+    targetPrefer Witch       =  return ()
     targetPrefer Healer      =  (#) $ PreferNoGroup $ OrderedPref Lowest hp
+    targetPrefer Catapult    =  (#) $ PreferNoGroup $ OrderedPref Highest hp
+    targetPrefer VapourCannon=  (#) $ PreferNoGroup $ OrderedPref Highest hp
     targetPrefer _           =  (#) PreferLocked
 
 availableUnits :: [UnitType]

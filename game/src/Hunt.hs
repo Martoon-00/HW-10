@@ -15,6 +15,7 @@ import Control.Monad.Trans.Maybe
 import Data.Array.IO
 import Data.Char
 import Data.Default
+import Data.IORef
 import Data.List
 import Data.Monoid
 import Data.Maybe
@@ -42,21 +43,23 @@ import Unit.Type
 import Unit.Variety
 
 battle :: IO ()
-battle  =  do
-    setTitle "Battle field"
---    void $ runMaybeT $ 
---        prepare >>= fmap lift fillField >>= fmap lift startBattle
-
-epicTest :: IO ()
-epicTest  =  (=<<) startBattle $ fillField $ ([Warrior, Archer], [TrainingTarget]) & both.traversed %~ defTemplate
-    -- void $ runMaybeT $ gatherUnitsV 10000
-    -- runMaybeT (defineCacheV 100) >>= print
-
+battle  =  void $ runMaybeT $ defineCacheV 10000 
+                          >>= gatherUnitsV 
+                          >>= lift . fillField 
+                          >>= lift . startBattle 
+                          >>= lift . putStrLn . printf "%s won" . show
+--  (=<<) startBattle $ fillField $ us & both.traversed %~ defTemplate
+--    void $ runMaybeT $ gatherUnitsV 500
+ --    runMaybeT (defineCacheV 100) >>= print
+  where
+--    us = ([Warrior, Archer, Recharger], [TrainingTarget]) 
+    us = ([ManaDrainTotem, Mage], replicate 10 TrainingTarget) 
     
-startBattle :: Field -> IO ()
+startBattle :: Field -> IO (Maybe Side)
 startBattle field  =  do
-    (sendEvent, finished) <- startDisplaying field
-
+    (sendEvent, waitFinish) <- startDisplaying field
+    
+    battleResult <- newIORef Nothing
     forkIO $ do
         sequence $ ( >> threadDelay (10 * 10^5)) . sendEvent . 
             SetMessage . Just . printf "Battle will start in %d..." <$> 
@@ -79,10 +82,12 @@ startBattle field  =  do
                 Nothing        -> "No"
                 Just LeftSide  -> "Left"
                 Just RightSide -> "Right"
+        atomicWriteIORef battleResult winner
         threadDelay $ 3 * 10^6
         sendEvent $ FinishField
-    takeMVar finished
+    waitFinish
     -- if interrupted with Esc, battle threads may continue in background
+    readIORef battleResult 
 
 type TicksPassed  =  Int
 type SumHealth    =  Int
@@ -93,9 +98,10 @@ waitForFightEnd field  =  do
     allUnits <- liftIO $ fieldUnits field
     let armies = partition (( == LeftSide)  . _side) $ allUnits
     -- count total units health, if remain unchanged for too long then finish battle 
-    let totalHp = sumOf (folded.hp) allUnits
+    let totalHp = sumOf (folded.hp) allUnits                                        -- lens usage
         modifyHpCounter s = fromMaybe (totalHp, 0) $ do
-            let (totalHp, tics) = s
+            let (curTotalHp, tics) = s
+            guard $ totalHp == curTotalHp 
             return (totalHp, tics + 1)     
     lift $ get >>= put. modifyHpCounter
     lift get >>= guard . ( < secondsTillDraw * (10^6) `div` checkDelay) . snd
@@ -118,11 +124,11 @@ waitForFightEnd field  =  do
 
 type SendEvent  =  FieldEvent -> IO ()
 
-startDisplaying :: Field -> IO (SendEvent, MVar ())
+startDisplaying :: Field -> IO (SendEvent, IO ())
 startDisplaying field  =  do
     evChan <- newChan
     finished <- newEmptyMVar
     forkIO $ battleV field evChan $ putMVar finished ()
-    return $ (writeChan evChan, finished)
+    return $ (writeChan evChan, void $ takeMVar finished)
 
 

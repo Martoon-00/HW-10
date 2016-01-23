@@ -41,11 +41,11 @@ class WithStats w where
         get u         =  u^.maxStat stat - u^.stat
         set u rem_hp  =  u & stat .~ u^.maxStat stat - rem_hp
 
-    partStat :: Lens' w Int -> Getter w Rational
+    partStat :: Lens' w Int -> Getter w (Maybe Rational)
     partStat stat  =  to $ \u -> 
         let cur = u^.stat.to fromIntegral
             max = u^.maxStat stat.to fromIntegral
-        in  if max == 0 then 0 else cur % max 
+        in  if max == 0 then Nothing else Just $ cur % max 
       
 
 boundStat :: Stat s Int => Lens' Stats s -> Lens' Unit Unit

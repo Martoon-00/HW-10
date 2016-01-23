@@ -52,8 +52,8 @@ fight field caster'  =  do
 
     failWait :: IO ()
     failWait = do
-        liftIO $ field & forUnit uid.casting .~ Nothing 
-        threadDelay $ fromIntegral $ toMicroseconds $ CD $ 10   -- if cast failed, get stunned
+        liftIO $ field & forUnit uid.casting .~ Stunned 
+        threadDelay $ fromIntegral $ toMicroseconds $ CD $ 10  
 
     again :: StateT LockedTargets IO ()
     again = do
@@ -102,7 +102,7 @@ fight field caster'  =  do
         setTargets
         castBox <- liftIO newEmptyMVar 
         cast   <- liftIO $ newCasting skill $ putMVar castBox CastInterrupted
-        liftIO $ field & forUnit uid.casting .~ Just cast
+        liftIO $ field & forUnit uid.casting .~ Cast cast
 
         preTargets <- get
         liftIO $ log $ mappend "Casting at  " $ concat 
@@ -191,6 +191,7 @@ fight field caster'  =  do
                 return newTargets
             put newTargets
             unitAct2
+            liftIO $ field & forUnit uid.casting .~ NoCast
             
 
         unitAct :: StateT LockedTargets STM ()
@@ -214,5 +215,5 @@ fight field caster'  =  do
 
 stopFight :: Field -> UnitId -> IO ()
 stopFight field uid  =  do
-    field & forUnit uid.casting .~ Nothing
+    field & forUnit uid.casting .~ NoCast
 
