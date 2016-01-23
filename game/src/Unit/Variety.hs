@@ -128,7 +128,7 @@ unitSkills Healer  =
          <> selectWithAboveZero (revStat hp) 
         , skillMultitarget  =  1
         , _cd  =  CD 1
-        , _mc  =  MC 3
+        , _mc  =  MC 15
         }
     ]
 unitSkills Rogue  =  
@@ -203,7 +203,7 @@ unitSkills VapourCannon  =
         , skillInfluence  =  NegativeInfluence
         , skillTargetSelection  =  include $
             selectBasingOnRelation 
-        , skillMultitarget  =  3
+        , skillMultitarget  =  5
         , _cd  =  CD 50
         , _mc  =  MC 3000
         }   
@@ -245,15 +245,16 @@ unitSkills ManaDrainTotem  =
         , _mc  =  MC 10
         }
     , Skill 
-        { skillAction  =  (onTarget $ over mp $ subtract 30)
-                      <+> (onSelf   $ over mp $ ( + 10))
+        { skillAction  =  (onTarget $ over mp $ subtract 3)
+                      <+> (onSelf   $ over mp $ ( + 1))
         , skillSideEffect  =  noAction
         , skillName  =  "Mana drain"
         , skillInfluence  =  NegativeInfluence
         , skillTargetSelection  =  include $
             selectBasingOnRelation
+         <> selectWithAboveZero mp
         , skillMultitarget  =  1
-        , _cd  =  CD 20
+        , _cd  =  CD 2
         , _mc  =  MC 0
         }   
     ]

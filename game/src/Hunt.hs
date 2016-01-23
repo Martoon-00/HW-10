@@ -48,13 +48,19 @@ battle  =  void $ runMaybeT $ defineCacheV 10000
                           >>= lift . fillField 
                           >>= lift . startBattle 
                           >>= lift . putStrLn . printf "%s won" . show
---  (=<<) startBattle $ fillField $ us & both.traversed %~ defTemplate
---    void $ runMaybeT $ gatherUnitsV 500
- --    runMaybeT (defineCacheV 100) >>= print
-  where
---    us = ([Warrior, Archer, Recharger], [TrainingTarget]) 
+
+simulateDefineCache :: IO ()
+simulateDefineCache  =  runMaybeT (defineCacheV 100) >>= print
+
+simulateGather :: IO ()
+simulateGather  =  void $ runMaybeT $ gatherUnitsV 500
+
+simulateBattle :: IO ()
+simulateBattle  = 
+    (=<<) print $ (=<<) startBattle $ fillField $ us & both.traversed %~ defTemplate
+  where    
     us = ([ManaDrainTotem, Mage], replicate 10 TrainingTarget) 
-    
+
 startBattle :: Field -> IO (Maybe Side)
 startBattle field  =  do
     (sendEvent, waitFinish) <- startDisplaying field

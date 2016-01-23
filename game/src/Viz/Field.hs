@@ -4,8 +4,7 @@
 
 module Viz.Field
     ( battleV,
-      FieldEvent(FinishField, SetMessage)
-
+      FieldEvent(FinishField, SetMessage, HighlightOutcome)
     ) 
 where
 
@@ -40,6 +39,7 @@ data FieldEvent  =  FEvent Event
                  |  UpdateField
                  |  FinishField
                  |  SetMessage (Maybe String)
+                 |  HighlightOutcome Outcome
 
 data FieldState  =  FS 
     { _fieldL   :: Field
@@ -47,7 +47,11 @@ data FieldState  =  FS
     , _message  :: Maybe String
     }
 
+data Outcome  =  Winner Side
+              |  Draw 
+
 makeLenses ''FieldState
+makePrisms ''Outcome
 
 battleV :: Field -> Chan FieldEvent -> IO () -> IO ()
 battleV field chan finish  =  do
@@ -99,11 +103,11 @@ renderField s  =  do
     let messageWidget = hLimit 30 $ center . str . fromMaybe " " $ s^.message
     let result = hBox [leftWidget, messageWidget, rightWidget]
     return result 
-  where
-    renderSide :: [Unit] -> IO Widget
-    renderSide units = do
-       uWidgets <- forM units $ fmap (padBottom $ Pad 1) . fmap hCenter . renderUnit 
-       return $ vBox $ uWidgets 
+  
+renderSide :: [Unit] -> IO Widget
+renderSide units = do
+    uWidgets <- forM units $ fmap (padBottom $ Pad 1) . fmap hCenter . renderUnit 
+    return $ vCenter $ vBox $ uWidgets 
 
 renderUnit :: Unit -> IO Widget
 renderUnit u  =  do

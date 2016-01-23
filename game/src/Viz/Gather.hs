@@ -145,17 +145,20 @@ drawAvUnitList :: (Cache -> Bool) -> List AvUnit -> Widget
 drawAvUnitList enoughCache  =  flip renderList renderLine
   where
     renderLine selected av = 
-        let name = str $ ((++) $ if selected then "  " else "") $ showAv av
+        let name = str $ showAv av
             money = avCost av
             money' = fg (enoughColor $ enoughCache money) &> str $ ('$' : ) $ 
                 alignRight 3 $ show $ money
-        in  money' <+> str "  " <+> padRight Max name
+        in  applySelection selected $ money' <+> str "  " <+> padRight Max name
  
     showAv Skip  =  "[Skip]"
     showAv (Av t)  =  show t
 
     enoughColor True  = green
     enoughColor False = red
+
+    applySelection False = id
+    applySelection True  = (&>) $ Attr (SetTo reverseVideo) KeepCurrent KeepCurrent 
 
 avCost :: AvUnit -> Cache
 avCost Skip  =  0
